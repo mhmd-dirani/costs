@@ -46,6 +46,20 @@
         </div>
       </div>
 
+      <div class="filter-row">
+        <div>
+          <label class="label" for="personFilter">Filter by person</label>
+          <select id="personFilter" disabled>
+            <option value="">All people</option>
+          </select>
+          <div class="hint">Select a name to view only their payments.</div>
+        </div>
+        <div class="pill filter-pill">
+          <div class="pill-title">Selected total</div>
+          <div id="personTotal" class="pill-value">—</div>
+        </div>
+      </div>
+
       <div class="actions">
         <button id="downloadXlsx" class="btn" disabled>Download updated Excel</button>
         <button id="downloadCsv" class="btn btn-ghost" disabled>Download CSV (current workshop)</button>

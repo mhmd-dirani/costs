@@ -36,6 +36,9 @@ h2{margin:0;font-size:18px}
 .card-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .grid{display:grid;grid-template-columns: 1.2fr 1fr 1fr; gap:14px; align-items:end}
 @media (max-width: 900px){ .grid{grid-template-columns:1fr;}}
+.filter-row{display:flex;gap:16px;align-items:flex-end;margin-top:16px;flex-wrap:wrap}
+.filter-row>div{flex:1;min-width:220px}
+.filter-pill{display:flex;flex-direction:column;justify-content:center}
 .label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
 input,select{
   width:100%;

@@ -6,7 +6,8 @@ const state = {
   workbook: null,           // SheetJS workbook
   sheets: {},               // { sheetName: [ {who, why, amount} ] }
   activeSheet: null,
-  sort: { key: null, asc: true }
+  sort: { key: null, asc: true },
+  personFilter: ""
 };
 
 const $ = (id) => document.getElementById(id);
@@ -15,6 +16,8 @@ const fileInput = $("fileInput");
 const sheetSelect = $("sheetSelect");
 const totalAmount = $("totalAmount");
 const rowCount = $("rowCount");
+const personFilter = $("personFilter");
+const personTotal = $("personTotal");
 const tableBody = $("paymentsTable").querySelector("tbody");
 const downloadXlsx = $("downloadXlsx");
 const downloadCsv = $("downloadCsv");
@@ -43,11 +46,47 @@ function computeTotal(rows){
   return rows.reduce((sum, r) => sum + coerceAmount(r.amount), 0);
 }
 
+function uniquePeople(rows){
+  const seen = new Set();
+  rows.forEach(r => {
+    const name = (r.who || "").trim();
+    if(name) seen.add(name);
+  });
+  return Array.from(seen).sort((a, b) => a.localeCompare(b));
+}
+
+function updatePersonFilterOptions(rows){
+  if(!personFilter) return;
+  personFilter.innerHTML = "";
+  const optAll = document.createElement("option");
+  optAll.value = "";
+  optAll.textContent = "All people";
+  personFilter.appendChild(optAll);
+
+  const names = uniquePeople(rows);
+  names.forEach(name => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    personFilter.appendChild(opt);
+  });
+
+  if(state.personFilter && !names.includes(state.personFilter)){
+    state.personFilter = "";
+  }
+
+  personFilter.value = state.personFilter;
+  personFilter.disabled = !state.activeSheet || names.length === 0;
+}
+
 function enableUI(enabled){
   sheetSelect.disabled = !enabled;
   downloadXlsx.disabled = !enabled;
   downloadCsv.disabled = !enabled;
   addBtn.disabled = !enabled;
+  if(personFilter){
+    personFilter.disabled = !enabled;
+  }
 }
 
 function toRowsFromSheet(sheet){
@@ -80,14 +119,22 @@ function render(){
   const rows = sheetName ? state.sheets[sheetName] : [];
   tableBody.innerHTML = "";
 
+   updatePersonFilterOptions(rows);
+
   if(!sheetName){
     totalAmount.textContent = "—";
     rowCount.textContent = "—";
+    personTotal.textContent = "—";
     return;
   }
 
+  const filterValue = state.personFilter;
+  const filteredRows = filterValue
+    ? rows.filter(r => (r.who || "").trim() === filterValue)
+    : rows;
+
   // Sort
-  const sorted = clone(rows);
+  const sorted = clone(filteredRows);
   const { key, asc } = state.sort;
   if(key){
     sorted.sort((a,b) => {
@@ -144,8 +191,10 @@ function render(){
     tableBody.appendChild(tr);
   });
 
-  rowCount.textContent = String(rows.length);
-  totalAmount.textContent = formatNumber(computeTotal(rows));
+  rowCount.textContent = String(filteredRows.length);
+  const filteredTotal = computeTotal(filteredRows);
+  totalAmount.textContent = formatNumber(filteredTotal);
+  personTotal.textContent = filterValue ? formatNumber(filteredTotal) : "—";
 }
 
 function populateSheetSelect(){
@@ -163,9 +212,12 @@ function populateSheetSelect(){
   });
 }
 
-function setActiveSheet(name){
+function setActiveSheet(name, opts = {}){
   state.activeSheet = name || null;
   sheetSelect.value = name || "";
+  if(!opts.preserveFilter || !name){
+    state.personFilter = "";
+  }
   render();
 }
 
@@ -215,7 +267,12 @@ function exportCsvCurrent(){
 const LS_KEY = "workshop_payments_state_v1";
 function persistToLocal(){
   try{
-    const payload = { sheets: state.sheets, activeSheet: state.activeSheet, sort: state.sort };
+    const payload = {
+      sheets: state.sheets,
+      activeSheet: state.activeSheet,
+      sort: state.sort,
+      personFilter: state.personFilter
+    };
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch(e){ /* ignore */ }
 }
@@ -228,9 +285,10 @@ function restoreFromLocal(){
       state.sheets = payload.sheets;
       state.activeSheet = payload.activeSheet || null;
       state.sort = payload.sort || state.sort;
+      state.personFilter = payload.personFilter || "";
       populateSheetSelect();
       enableUI(Object.keys(state.sheets).length > 0);
-      setActiveSheet(state.activeSheet || Object.keys(state.sheets)[0] || null);
+      setActiveSheet(state.activeSheet || Object.keys(state.sheets)[0] || null, { preserveFilter: true });
       return true;
     }
   } catch(e){ /* ignore */ }
@@ -266,6 +324,12 @@ fileInput.addEventListener("change", async (e) => {
 sheetSelect.addEventListener("change", (e) => {
   setActiveSheet(e.target.value);
   persistToLocal();
+});
+
+personFilter.addEventListener("change", (e) => {
+  state.personFilter = e.target.value || "";
+  persistToLocal();
+  render();
 });
 
 downloadXlsx.addEventListener("click", exportXlsx);
