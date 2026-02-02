@@ -92,6 +92,6 @@ tr:hover td{background:rgba(96,165,250,.06)}
   cursor:pointer;
 }
 .iconbtn:hover{border-color:rgba(96,165,250,.6)}
-.form{display:grid;grid-template-columns: 1fr 2fr 1fr; gap:12px; align-items:end}
+.form{display:grid;grid-template-columns: 1fr 1.5fr 1fr 1fr; gap:12px; align-items:end}
 @media (max-width: 900px){ .form{grid-template-columns:1fr;}}
 .footer{padding:10px 2px;font-size:12px}

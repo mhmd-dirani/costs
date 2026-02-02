@@ -43,6 +43,73 @@ function formatNumber(n){
 }
 function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
 
+function excelSerialToISO(serial){
+  if(!Number.isFinite(serial)) return "";
+  if(typeof XLSX !== "undefined" && XLSX?.SSF?.parse_date_code){
+    const parsed = XLSX.SSF.parse_date_code(serial);
+    if(parsed){
+      const y = parsed.y;
+      const m = String(parsed.m).padStart(2, "0");
+      const d = String(parsed.d).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+  }
+  const excelEpoch = Date.UTC(1899, 11, 30); // Excel serial origin
+  const ms = excelEpoch + serial * 24 * 60 * 60 * 1000;
+  const date = new Date(ms);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0,10);
+}
+
+function normalizeDateValue(value){
+  if(value === undefined || value === null || value === "") return "";
+  if(value instanceof Date && !Number.isNaN(value.getTime())){
+    return value.toISOString().slice(0,10);
+  }
+  if(typeof value === "number"){
+    return excelSerialToISO(value);
+  }
+  if(typeof value === "string"){
+    const trimmed = value.trim();
+    if(!trimmed) return "";
+    if(/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if(!Number.isNaN(parsed.getTime())){
+      return parsed.toISOString().slice(0,10);
+    }
+    return trimmed;
+  }
+  return "";
+}
+
+function formatDateDisplay(value){
+  if(!value) return "—";
+  if(/^\d{4}-\d{2}-\d{2}$/.test(value)){
+    const parsed = new Date(value);
+    if(!Number.isNaN(parsed.getTime())){
+      try { return new Intl.DateTimeFormat().format(parsed); } catch { return value; }
+    }
+  }
+  const parsed = new Date(value);
+  if(!Number.isNaN(parsed.getTime())){
+    try { return new Intl.DateTimeFormat().format(parsed); } catch { return value; }
+  }
+  return value;
+}
+
+function sortValueForKey(row, key){
+  if(key === "amount") return coerceAmount(row.amount);
+  if(key === "date"){
+    const normalized = normalizeDateValue(row.date);
+    return normalized || (row.date || "");
+  }
+  return String(row[key] ?? "").toLowerCase();
+}
+
+function toInputDateValue(value){
+  const normalized = normalizeDateValue(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : "";
+}
+
 function computeTotal(rows){
   return rows.reduce((sum, r) => sum + coerceAmount(r.amount), 0);
 }
@@ -99,13 +166,15 @@ function toRowsFromSheet(sheet){
 
   // If headers are weird, SheetJS still returns objects; normalize keys
   const rows = raw.map((r) => {
-    const out = { who: "", why: "", amount: 0 };
+    const out = { who: "", why: "", amount: 0, date: "" };
     for(const [k, v] of Object.entries(r)){
       const nk = normalizeHeader(k);
       if(nk === "who" || nk === "to" || nk === "paid to" || nk === "name"){
         out.who = String(v).trim();
       } else if(nk === "why" || nk === "reason" || nk === "description" || nk === "for"){
         out.why = String(v).trim();
+      } else if(nk === "date" || nk === "paid on" || nk === "payment date"){
+        out.date = normalizeDateValue(v);
       } else if(nk === "how much" || nk === "amount" || nk === "value" || nk === "cost"){
         out.amount = coerceAmount(v);
       }
@@ -147,8 +216,8 @@ function render(){
   const { key, asc } = state.sort;
   if(key){
     sorted.sort((a,b) => {
-      const av = key === "amount" ? coerceAmount(a.row[key]) : String(a.row[key] ?? "").toLowerCase();
-      const bv = key === "amount" ? coerceAmount(b.row[key]) : String(b.row[key] ?? "").toLowerCase();
+      const av = sortValueForKey(a.row, key);
+      const bv = sortValueForKey(b.row, key);
       if(av < bv) return asc ? -1 : 1;
       if(av > bv) return asc ? 1 : -1;
       return 0;
@@ -176,6 +245,14 @@ function render(){
       tdWhy.appendChild(whyInput);
       tr.appendChild(tdWhy);
 
+      const tdDate = document.createElement("td");
+      const dateInput = document.createElement("input");
+      dateInput.type = "date";
+      dateInput.value = toInputDateValue(row.date);
+      dateInput.placeholder = "YYYY-MM-DD";
+      tdDate.appendChild(dateInput);
+      tr.appendChild(tdDate);
+
       const tdAmt = document.createElement("td");
       tdAmt.className = "right";
       const amountInput = document.createElement("input");
@@ -199,10 +276,12 @@ function render(){
         const nextWho = whoInput.value.trim();
         const nextWhy = whyInput.value.trim();
         if(!nextWho || !nextWhy) return;
+        const nextDate = normalizeDateValue(dateInput.value);
         const nextAmount = coerceAmount(amountInput.value);
         const target = state.sheets[sheetName][idx];
         target.who = nextWho;
         target.why = nextWhy;
+        target.date = nextDate;
         target.amount = nextAmount;
         state.editingRowIndex = null;
         persistToLocal();
@@ -230,6 +309,10 @@ function render(){
       const tdWhy = document.createElement("td");
       tdWhy.textContent = row.why || "";
       tr.appendChild(tdWhy);
+
+      const tdDate = document.createElement("td");
+      tdDate.textContent = formatDateDisplay(row.date);
+      tr.appendChild(tdDate);
 
       const tdAmt = document.createElement("td");
       tdAmt.className = "right";
@@ -315,11 +398,11 @@ function workbookFromState(){
   // Create a new workbook from current state (all sheets).
   const wb = XLSX.utils.book_new();
   Object.entries(state.sheets).forEach(([name, rows]) => {
-    const aoa = [["Who","Why","How Much"]];
-    rows.forEach(r => aoa.push([r.who, r.why, coerceAmount(r.amount)]));
+    const aoa = [["Who","Why","Date","How Much"]];
+    rows.forEach(r => aoa.push([r.who, r.why, r.date || "", coerceAmount(r.amount)]));
     // Add a total row (nice in Excel)
     aoa.push([]);
-    aoa.push(["", "TOTAL", computeTotal(rows)]);
+    aoa.push(["", "TOTAL", "", computeTotal(rows)]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     XLSX.utils.book_append_sheet(wb, ws, name);
   });
@@ -347,7 +430,7 @@ function exportXlsx(){
 function exportCsvCurrent(){
   if(!state.activeSheet) return;
   const rows = state.sheets[state.activeSheet] || [];
-  const aoa = [["Who","Why","How Much"], ...rows.map(r => [r.who, r.why, coerceAmount(r.amount)])];
+  const aoa = [["Who","Why","Date","How Much"], ...rows.map(r => [r.who, r.why, r.date || "", coerceAmount(r.amount)])];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const csv = XLSX.utils.sheet_to_csv(ws);
   downloadBlob(new Blob([csv], { type:"text/csv;charset=utf-8" }), `${state.activeSheet}.csv`);
@@ -434,14 +517,16 @@ addForm.addEventListener("submit", (e) => {
 
   const who = $("whoInput").value.trim();
   const why = $("whyInput").value.trim();
+  const date = normalizeDateValue($("dateInput").value);
   const amount = coerceAmount($("amountInput").value);
 
   if(!who || !why) return;
 
-  state.sheets[state.activeSheet].push({ who, why, amount });
+  state.sheets[state.activeSheet].push({ who, why, date, amount });
   state.editingRowIndex = null;
   $("whoInput").value = "";
   $("whyInput").value = "";
+  $("dateInput").value = "";
   $("amountInput").value = "";
   $("whoInput").focus();
 

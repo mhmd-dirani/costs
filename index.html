@@ -28,7 +28,7 @@
 
         <div>
           <label class="label" for="sheetSelect">Workshop</label>
-          <select id="sheetSelect" disabled>
+          <label class="label" for="amountInput">How much</label>
             <option value="">—</option>
           </select>
           <div class="hint">Each Excel sheet = one workshop.</div>
@@ -45,7 +45,6 @@
           </div>
         </div>
       </div>
-
       <div class="filter-row">
         <div>
           <label class="label" for="personFilter">Filter by person</label>
@@ -79,6 +78,7 @@
             <tr>
               <th data-key="who">Who</th>
               <th data-key="why">Why</th>
+              <th data-key="date">Date</th>
               <th data-key="amount" class="right">How much</th>
               <th class="right">Actions</th>
             </tr>
@@ -101,6 +101,11 @@
         <div class="field">
           <label class="label" for="whyInput">Why</label>
           <input id="whyInput" type="text" placeholder="Reason / description" required />
+        </div>
+        <div class="field">
+          <label class="label" for="dateInput">Date</label>
+          <input id="dateInput" type="date" />
+          <div class="hint">Optional. Leave empty if unknown.</div>
         </div>
         <div class="field">
           <label class="label" for="amountInput">How much</label>
