@@ -7,7 +7,8 @@ const state = {
   sheets: {},               // { sheetName: [ {who, why, amount} ] }
   activeSheet: null,
   sort: { key: null, asc: true },
-  personFilter: ""
+  personFilter: "",
+  editingRowIndex: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -119,80 +120,168 @@ function render(){
   const rows = sheetName ? state.sheets[sheetName] : [];
   tableBody.innerHTML = "";
 
-   updatePersonFilterOptions(rows);
+  updatePersonFilterOptions(rows);
 
   if(!sheetName){
     totalAmount.textContent = "—";
     rowCount.textContent = "—";
     personTotal.textContent = "—";
+    state.editingRowIndex = null;
     return;
   }
 
   const filterValue = state.personFilter;
-  const filteredRows = filterValue
-    ? rows.filter(r => (r.who || "").trim() === filterValue)
-    : rows;
+  const annotatedRows = rows.map((row, idx) => ({ row, idx }));
+  const filteredAnnotated = filterValue
+    ? annotatedRows.filter(({ row }) => (row.who || "").trim() === filterValue)
+    : annotatedRows;
 
-  // Sort
-  const sorted = clone(filteredRows);
+  if(state.editingRowIndex !== null){
+    const visible = filteredAnnotated.some(entry => entry.idx === state.editingRowIndex);
+    if(!visible){
+      state.editingRowIndex = null;
+    }
+  }
+
+  const sorted = filteredAnnotated.slice();
   const { key, asc } = state.sort;
   if(key){
     sorted.sort((a,b) => {
-      const av = key === "amount" ? coerceAmount(a[key]) : String(a[key] ?? "").toLowerCase();
-      const bv = key === "amount" ? coerceAmount(b[key]) : String(b[key] ?? "").toLowerCase();
+      const av = key === "amount" ? coerceAmount(a.row[key]) : String(a.row[key] ?? "").toLowerCase();
+      const bv = key === "amount" ? coerceAmount(b.row[key]) : String(b.row[key] ?? "").toLowerCase();
       if(av < bv) return asc ? -1 : 1;
       if(av > bv) return asc ? 1 : -1;
       return 0;
     });
   }
 
-  sorted.forEach((r, idx) => {
+  sorted.forEach(({ row, idx }) => {
     const tr = document.createElement("tr");
+    const isEditing = state.editingRowIndex === idx;
 
-    const tdWho = document.createElement("td");
-    tdWho.textContent = r.who || "";
-    tr.appendChild(tdWho);
+    if(isEditing){
+      const tdWho = document.createElement("td");
+      const whoInput = document.createElement("input");
+      whoInput.type = "text";
+      whoInput.value = row.who || "";
+      whoInput.placeholder = "Name";
+      tdWho.appendChild(whoInput);
+      tr.appendChild(tdWho);
 
-    const tdWhy = document.createElement("td");
-    tdWhy.textContent = r.why || "";
-    tr.appendChild(tdWhy);
+      const tdWhy = document.createElement("td");
+      const whyInput = document.createElement("input");
+      whyInput.type = "text";
+      whyInput.value = row.why || "";
+      whyInput.placeholder = "Reason";
+      tdWhy.appendChild(whyInput);
+      tr.appendChild(tdWhy);
 
-    const tdAmt = document.createElement("td");
-    tdAmt.className = "right";
-    tdAmt.textContent = formatNumber(coerceAmount(r.amount));
-    tr.appendChild(tdAmt);
+      const tdAmt = document.createElement("td");
+      tdAmt.className = "right";
+      const amountInput = document.createElement("input");
+      amountInput.type = "number";
+      amountInput.inputMode = "decimal";
+      amountInput.value = String(row.amount ?? "");
+      amountInput.placeholder = "0";
+      tdAmt.appendChild(amountInput);
+      tr.appendChild(tdAmt);
 
-    const tdAct = document.createElement("td");
-    tdAct.className = "right";
-    const wrap = document.createElement("div");
-    wrap.className = "row-actions";
+      const tdAct = document.createElement("td");
+      tdAct.className = "right";
+      const wrap = document.createElement("div");
+      wrap.className = "row-actions";
 
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "iconbtn";
-    del.textContent = "Delete";
-    del.title = "Delete this row";
-    del.addEventListener("click", () => {
-      // delete by identity: find first matching row in original list
-      const originalIndex = state.sheets[sheetName].findIndex(x =>
-        x.who === r.who && x.why === r.why && coerceAmount(x.amount) === coerceAmount(r.amount)
-      );
-      if(originalIndex >= 0){
-        state.sheets[sheetName].splice(originalIndex, 1);
+      const saveBtn = document.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = "iconbtn";
+      saveBtn.textContent = "Save";
+      saveBtn.addEventListener("click", () => {
+        const nextWho = whoInput.value.trim();
+        const nextWhy = whyInput.value.trim();
+        if(!nextWho || !nextWhy) return;
+        const nextAmount = coerceAmount(amountInput.value);
+        const target = state.sheets[sheetName][idx];
+        target.who = nextWho;
+        target.why = nextWhy;
+        target.amount = nextAmount;
+        state.editingRowIndex = null;
         persistToLocal();
         render();
-      }
-    });
+      });
 
-    wrap.appendChild(del);
-    tdAct.appendChild(wrap);
-    tr.appendChild(tdAct);
+      const cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "iconbtn";
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.addEventListener("click", () => {
+        state.editingRowIndex = null;
+        render();
+      });
+
+      wrap.appendChild(saveBtn);
+      wrap.appendChild(cancelBtn);
+      tdAct.appendChild(wrap);
+      tr.appendChild(tdAct);
+    } else {
+      const tdWho = document.createElement("td");
+      tdWho.textContent = row.who || "";
+      tr.appendChild(tdWho);
+
+      const tdWhy = document.createElement("td");
+      tdWhy.textContent = row.why || "";
+      tr.appendChild(tdWhy);
+
+      const tdAmt = document.createElement("td");
+      tdAmt.className = "right";
+      tdAmt.textContent = formatNumber(coerceAmount(row.amount));
+      tr.appendChild(tdAmt);
+
+      const tdAct = document.createElement("td");
+      tdAct.className = "right";
+      const wrap = document.createElement("div");
+      wrap.className = "row-actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "iconbtn";
+      editBtn.textContent = "Edit";
+      editBtn.title = "Edit this row";
+      editBtn.addEventListener("click", () => {
+        state.editingRowIndex = idx;
+        render();
+      });
+
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "iconbtn";
+      del.textContent = "Delete";
+      del.title = "Delete this row";
+      del.addEventListener("click", () => {
+        const list = state.sheets[sheetName];
+        if(!list) return;
+        list.splice(idx, 1);
+        if(state.editingRowIndex !== null){
+          if(state.editingRowIndex === idx){
+            state.editingRowIndex = null;
+          } else if(state.editingRowIndex > idx){
+            state.editingRowIndex -= 1;
+          }
+        }
+        persistToLocal();
+        render();
+      });
+
+      wrap.appendChild(editBtn);
+      wrap.appendChild(del);
+      tdAct.appendChild(wrap);
+      tr.appendChild(tdAct);
+    }
 
     tableBody.appendChild(tr);
   });
 
-  rowCount.textContent = String(filteredRows.length);
-  const filteredTotal = computeTotal(filteredRows);
+  rowCount.textContent = String(filteredAnnotated.length);
+  const filteredTotal = filteredAnnotated.reduce((sum, entry) => sum + coerceAmount(entry.row.amount), 0);
   totalAmount.textContent = formatNumber(filteredTotal);
   personTotal.textContent = filterValue ? formatNumber(filteredTotal) : "—";
 }
@@ -218,6 +307,7 @@ function setActiveSheet(name, opts = {}){
   if(!opts.preserveFilter || !name){
     state.personFilter = "";
   }
+  state.editingRowIndex = null;
   render();
 }
 
@@ -326,11 +416,13 @@ sheetSelect.addEventListener("change", (e) => {
   persistToLocal();
 });
 
-personFilter.addEventListener("change", (e) => {
-  state.personFilter = e.target.value || "";
-  persistToLocal();
-  render();
-});
+if(personFilter){
+  personFilter.addEventListener("change", (e) => {
+    state.personFilter = e.target.value || "";
+    persistToLocal();
+    render();
+  });
+}
 
 downloadXlsx.addEventListener("click", exportXlsx);
 downloadCsv.addEventListener("click", exportCsvCurrent);
@@ -347,6 +439,7 @@ addForm.addEventListener("submit", (e) => {
   if(!who || !why) return;
 
   state.sheets[state.activeSheet].push({ who, why, amount });
+  state.editingRowIndex = null;
   $("whoInput").value = "";
   $("whyInput").value = "";
   $("amountInput").value = "";
