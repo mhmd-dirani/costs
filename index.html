@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Workshop Payments Index</title>
+  <link rel="stylesheet" href="styles.css"/>
+  <!-- SheetJS (XLSX reader/writer) -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap">
+      <h1>Workshop Payments</h1>
+      <p class="muted">Open your Excel file, pick a workshop (sheet), view totals, and add new payments.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="card">
+      <div class="grid">
+        <div>
+          <label class="label" for="fileInput">Excel file (.xlsx)</label>
+          <input id="fileInput" type="file" accept=".xlsx,.xls" />
+          <div id="fileHint" class="hint">Choose your file (example: <span class="code">work_slips.xlsx</span>).</div>
+        </div>
+
+        <div>
+          <label class="label" for="sheetSelect">Workshop</label>
+          <select id="sheetSelect" disabled>
+            <option value="">—</option>
+          </select>
+          <div class="hint">Each Excel sheet = one workshop.</div>
+        </div>
+
+        <div class="summary">
+          <div class="pill">
+            <div class="pill-title">Total</div>
+            <div id="totalAmount" class="pill-value">—</div>
+          </div>
+          <div class="pill">
+            <div class="pill-title">Rows</div>
+            <div id="rowCount" class="pill-value">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="downloadXlsx" class="btn" disabled>Download updated Excel</button>
+        <button id="downloadCsv" class="btn btn-ghost" disabled>Download CSV (current workshop)</button>
+        <button id="clearLocal" class="btn btn-ghost" title="Clears only your browser state">Reset</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Payments</h2>
+        <div class="muted small">Tip: click a column header to sort.</div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="paymentsTable">
+          <thead>
+            <tr>
+              <th data-key="who">Who</th>
+              <th data-key="why">Why</th>
+              <th data-key="amount" class="right">How much</th>
+              <th class="right">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Add a payment</h2>
+      </div>
+
+      <form id="addForm" class="form" autocomplete="off">
+        <div class="field">
+          <label class="label" for="whoInput">Who</label>
+          <input id="whoInput" type="text" placeholder="Name" required />
+        </div>
+        <div class="field">
+          <label class="label" for="whyInput">Why</label>
+          <input id="whyInput" type="text" placeholder="Reason / description" required />
+        </div>
+        <div class="field">
+          <label class="label" for="amountInput">How much</label>
+          <input id="amountInput" type="number" inputmode="decimal" placeholder="0" required />
+          <div class="hint">Use digits only (e.g., 60000). You can format later in Excel if needed.</div>
+        </div>
+
+        <div class="actions">
+          <button id="addBtn" class="btn" type="submit" disabled>Add</button>
+        </div>
+      </form>
+    </section>
+
+    <footer class="footer muted">
+      <div>Data stays on your device. Nothing is uploaded anywhere.</div>
+    </footer>
+  </main>
+</body>
+</html>
